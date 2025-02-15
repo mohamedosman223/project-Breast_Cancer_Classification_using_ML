@@ -1,0 +1,174 @@
+from flask import Flask, request, jsonify, render_template
+import joblib
+import numpy as np
+from sklearn.impute import SimpleImputer  # Import imputation library
+
+app = Flask(__name__)
+
+# Load models
+models = {
+    "linear": joblib.load("linear.joblib"),
+    "poly": joblib.load("poly.joblib"),
+    "rbf": joblib.load("rbf.joblib"),
+    "RF": joblib.load("RF.joblib"),
+    "GB": joblib.load("GB.joblib"),
+    "KNN": joblib.load("KNN.joblib"),
+    "SVC": joblib.load("SVC.joblib")  # Added SVC model
+}
+
+# Initialize imputer to replace missing values with the mean
+imputer = SimpleImputer(strategy="mean")  # You can use "mean", "median", or "most_frequent"
+
+@app.route("/")
+def home():
+    return render_template("index.html")  # Make sure index.html is in the templates folder
+
+@app.route("/predict", methods=["POST"])
+def predict():
+    try:
+        # Receive data from the client
+        data = request.json
+        
+        # Extract features from the data (only 5 features)
+        features = np.array(data["features"][:5]).reshape(1, -1)  # Reshape the data into a 2D array, taking the first 5 features only
+
+        # Print received features (for debugging purposes)
+        print(f"Received features: {features}")
+
+        # Use the imputer to handle missing values
+        features_imputed = imputer.fit_transform(features)
+
+        # Print features after imputation
+        print(f"Imputed features: {features_imputed}")
+
+        # Get the model name from the input data (default is "linear")
+        model_name = data.get("model", "linear")
+        model = models.get(model_name)
+
+        if not model:
+            return jsonify({"error": f"Model '{model_name}' not found!"}), 400
+
+        # Make prediction using the selected model
+        prediction = model.predict(features_imputed)
+
+        # Print prediction result
+        print(f"Prediction from model {model_name}: {prediction}")
+
+        # Return the prediction as a JSON response
+        return jsonify({"prediction": int(prediction[0])})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
+    app.run(debug=True)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prediction Form Using Different Models</title>
+</head>
+<body>
+    <h1>Prediction Form Using Different Models</h1>
+    
+    <form id="prediction-form">
+        <!-- Input 5 features only -->
+        <label for="feature1">Feature 1:</label>
+        <input type="text" id="feature1" name="feature1" required><br><br>
+
+        <label for="feature2">Feature 2:</label>
+        <input type="text" id="feature2" name="feature2" required><br><br>
+
+        <label for="feature3">Feature 3:</label>
+        <input type="text" id="feature3" name="feature3" required><br><br>
+
+        <label for="feature4">Feature 4:</label>
+        <input type="text" id="feature4" name="feature4" required><br><br>
+
+        <label for="feature5">Feature 5:</label>
+        <input type="text" id="feature5" name="feature5" required><br><br>
+
+        <label for="model">Choose Model:</label>
+        <select id="model" name="model">
+            <option value="linear">Linear Model</option>
+            <option value="poly">Polynomial Model</option>
+            <option value="rbf">RBF Model</option>
+            <option value="RF">Random Forest Model</option>
+            <option value="GB">Gradient Boosting Model</option>
+            <option value="KNN">KNN Model</option>
+            <option value="SVC">SVC Model</option> <!-- Added SVC here -->
+        </select><br><br>
+
+        <button type="submit">Make Prediction</button>
+    </form>
+
+    <h2>Prediction Result:</h2>
+    <p id="prediction-result"></p>
+
+    <script>
+        document.getElementById('prediction-form').addEventListener('submit', async function (event) {
+            event.preventDefault();
+
+            const features = [];
+            for (let i = 1; i <= 5; i++) { // Only 5 features here
+                const feature = parseFloat(document.getElementById(`feature${i}`).value);
+                if (isNaN(feature)) {
+                    alert(`Please enter a valid value for Feature ${i}`);
+                    return;
+                }
+                features.push(feature);
+            }
+
+            const model = document.getElementById('model').value;
+
+            const data = {
+                features: features,
+                model: model
+            };
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+                if (result.prediction !== undefined) {
+                    document.getElementById('prediction-result').innerText = `Prediction: ${result.prediction}`;
+                } else {
+                    document.getElementById('prediction-result').innerText = `Error: ${result.error}`;
+                }
+            } catch (error) {
+                document.getElementById('prediction-result').innerText = `Connection Error: ${error}`;
+            }
+        });
+    </script>
+</body>
+</html>
+
+
